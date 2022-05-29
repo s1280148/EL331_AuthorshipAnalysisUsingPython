@@ -36,6 +36,7 @@ def get_tokenized_text(original_text):
     tokenizer = nltk.tokenize.RegexpTokenizer(r'\w+')
     return tokenizer.tokenize(original_text)
 
+
 ###
 # This class performs Authorship Verification.
 ###
@@ -48,6 +49,7 @@ class AuthorshipVerifier:
     known_texts_by_author = dict()
     questioned_texts_by_author = dict()
     ngram_count_by_author = dict()
+    each_word_occurrence_rate_by_author = dict()
 
     def __init__(self, client, user_name_1, user_name_2):
         self.client = client
@@ -59,6 +61,8 @@ class AuthorshipVerifier:
         self.divide_questioned_texts_and_known_texts()
 
         self.create_ngram_count_by_author()
+
+        self.create_each_word_occurrence_rate_by_author()
 
     def create_tweet_texts_by_author(self):
         for user_name in [self.user_name_1, self.user_name_2]:
@@ -102,6 +106,16 @@ class AuthorshipVerifier:
                     tokenized_text = get_tokenized_text(known_text)
                     for ngram in nltk.ngrams(tokenized_text, n):
                         self.ngram_count_by_author[user_name][n][ngram] += 1
+
+    def create_each_word_occurrence_rate_by_author(self):
+        for user_name in [self.user_name_1, self.user_name_2]:
+            self.each_word_occurrence_rate_by_author[user_name] = collections.defaultdict(lambda: float())
+
+            word_count_sum = sum(self.ngram_count_by_author[user_name][1].values())
+
+            for word, word_count in self.ngram_count_by_author[user_name][1].items():
+                word_occurrence = word_count / word_count_sum
+                self.each_word_occurrence_rate_by_author[user_name][word] = word_occurrence
 
 
 # Main process of the program
