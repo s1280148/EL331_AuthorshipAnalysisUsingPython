@@ -1,11 +1,9 @@
 # Import required libraries, etc.
+import sys
 import os
+import collections
 from dotenv import load_dotenv
 import tweepy
-
-
-# Declare global variables.
-client = None
 
 
 ###
@@ -14,7 +12,6 @@ client = None
 # Environment variables must be defined in the ".env" file.
 ###
 def setup_twitter_api():
-    global client
     load_dotenv()
 
     API_KEY = os.environ.get("API_KEY")
@@ -29,9 +26,45 @@ def setup_twitter_api():
                            access_token = ACCESS_TOKEN,
                            access_token_secret = ACCESS_TOKEN_SECRET)
 
-
-def main():
-    setup_twitter_api()
+    return client
 
 
-main()
+###
+# This class performs Authorship Verification.
+###
+class AuthorshipVerifier:
+    tweet_texts_by_author = collections.defaultdict(lambda: list())
+
+    def __init__(self, client, user_name_1, user_name_2):
+        for user_name in [user_name_1, user_name_2]:
+            user_id = client.get_user(username = user_name).data.id
+
+            pagination_token = None
+            for i in range(20):
+                tweets = client.get_users_tweets(id = user_id,
+                                                 max_results = 100,
+                                                 exclude = "retweets",
+                                                 pagination_token = pagination_token)
+
+                for tweet_data in tweets.data:
+                    self.tweet_texts_by_author[user_name].append(tweet_data["text"])
+
+                pagination_token = tweets.meta["next_token"]
+
+
+# Main process of the program
+def main(args):
+
+    if len(args) != 3:
+        print("Please enter two Twitter usernames.")
+        exit()
+
+    user_name_1 = args[1]
+    user_name_2 = args[2]
+
+    client = setup_twitter_api()
+
+    authorshipVerifier = AuthorshipVerifier(client, user_name_1, user_name_2)
+
+
+main(sys.argv)
