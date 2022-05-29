@@ -2,8 +2,11 @@
 import sys
 import os
 import collections
+import random
+import re
 from dotenv import load_dotenv
 import tweepy
+import nltk
 
 
 ###
@@ -29,6 +32,10 @@ def setup_twitter_api():
     return client
 
 
+def get_tokenized_text(original_text):
+    tokenizer = nltk.tokenize.RegexpTokenizer(r'\w+')
+    return tokenizer.tokenize(original_text)
+
 ###
 # This class performs Authorship Verification.
 ###
@@ -38,6 +45,9 @@ class AuthorshipVerifier:
     user_name_1 = str()
     user_name_2 = str()
     tweet_texts_by_author = collections.defaultdict(lambda: list())
+    known_texts_by_author = dict()
+    questioned_texts_by_author = dict()
+    ngram_count_by_author = dict()
 
     def __init__(self, client, user_name_1, user_name_2):
         self.client = client
@@ -45,6 +55,10 @@ class AuthorshipVerifier:
         self.user_name_2 = user_name_2
 
         self.create_tweet_texts_by_author()
+
+        self.divide_questioned_texts_and_known_texts()
+
+        self.create_ngram_count_by_author()
 
     def create_tweet_texts_by_author(self):
         for user_name in [self.user_name_1, self.user_name_2]:
@@ -58,9 +72,36 @@ class AuthorshipVerifier:
                                                  pagination_token = pagination_token)
 
                 for tweet_data in tweets.data:
-                    self.tweet_texts_by_author[user_name].append(tweet_data["text"])
+                    remove_url_text = re.sub(r"\S*https?:\S*", "", tweet_data["text"])
+                    self.tweet_texts_by_author[user_name].append(remove_url_text)
 
                 pagination_token = tweets.meta["next_token"]
+
+    def divide_questioned_texts_and_known_texts(self):
+        for user_name in [self.user_name_1, self.user_name_2]:
+            tweet_texts = self.tweet_texts_by_author[user_name]
+            shuffled_tweet_texts = random.sample(tweet_texts, len(tweet_texts))
+
+            known_text_count = int(len(shuffled_tweet_texts) * 0.9)
+
+            known_texts = shuffled_tweet_texts[:known_text_count]
+            questioned_texts = shuffled_tweet_texts[known_text_count:]
+
+            self.known_texts_by_author[user_name] = known_texts
+            self.questioned_texts_by_author[user_name] = questioned_texts
+
+    def create_ngram_count_by_author(self):
+        ngram_numbers = [1, 2, 3]
+        for user_name in [self.user_name_1, self.user_name_2]:
+            self.ngram_count_by_author[user_name] = dict()
+
+            for n in ngram_numbers:
+                self.ngram_count_by_author[user_name][n] = collections.defaultdict(lambda: int())
+
+                for known_text in self.known_texts_by_author[user_name]:
+                    tokenized_text = get_tokenized_text(known_text)
+                    for ngram in nltk.ngrams(tokenized_text, n):
+                        self.ngram_count_by_author[user_name][n][ngram] += 1
 
 
 # Main process of the program
