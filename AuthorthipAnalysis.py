@@ -33,15 +33,26 @@ def setup_twitter_api():
 # This class performs Authorship Verification.
 ###
 class AuthorshipVerifier:
+
+    client = None
+    user_name_1 = str()
+    user_name_2 = str()
     tweet_texts_by_author = collections.defaultdict(lambda: list())
 
     def __init__(self, client, user_name_1, user_name_2):
-        for user_name in [user_name_1, user_name_2]:
-            user_id = client.get_user(username = user_name).data.id
+        self.client = client
+        self.user_name_1 = user_name_1
+        self.user_name_2 = user_name_2
+
+        self.create_tweet_texts_by_author()
+
+    def create_tweet_texts_by_author(self):
+        for user_name in [self.user_name_1, self.user_name_2]:
+            user_id = self.client.get_user(username = user_name).data.id
 
             pagination_token = None
             for i in range(20):
-                tweets = client.get_users_tweets(id = user_id,
+                tweets = self.client.get_users_tweets(id = user_id,
                                                  max_results = 100,
                                                  exclude = "retweets",
                                                  pagination_token = pagination_token)
