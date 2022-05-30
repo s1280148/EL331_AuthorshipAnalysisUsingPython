@@ -44,8 +44,7 @@ def get_tokenized_text(original_text):
 class AuthorshipVerifier:
 
     client = None
-    user_name_1 = str()
-    user_name_2 = str()
+    author_names = list()
     tweet_texts_by_author = collections.defaultdict(lambda: list())
     known_texts_by_author = dict()
     questioned_texts_by_author = dict()
@@ -56,8 +55,7 @@ class AuthorshipVerifier:
 
     def __init__(self, client, user_name_1, user_name_2):
         self.client = client
-        self.user_name_1 = user_name_1
-        self.user_name_2 = user_name_2
+        self.author_names = [user_name_1, user_name_2]
 
         self.create_tweet_texts_by_author()
 
@@ -68,11 +66,11 @@ class AuthorshipVerifier:
         self.create_each_word_occurrence_rate_by_author()
 
     def create_tweet_texts_by_author(self):
-        for user_name in [self.user_name_1, self.user_name_2]:
-            user_id = self.client.get_user(username = user_name).data.id
+        for author_name in self.author_names:
+            user_id = self.client.get_user(username = author_name).data.id
 
             pagination_token = None
-            for i in range(100):
+            for i in range(20):
                 tweets = self.client.get_users_tweets(id = user_id,
                                                  max_results = 100,
                                                  exclude = "retweets",
@@ -80,7 +78,7 @@ class AuthorshipVerifier:
 
                 for tweet_data in tweets.data:
                     remove_url_text = re.sub(r"\S*https?:\S*", "", tweet_data["text"])
-                    self.tweet_texts_by_author[user_name].append(remove_url_text)
+                    self.tweet_texts_by_author[author_name].append(remove_url_text)
 
                 try:
                     pagination_token = tweets.meta["next_token"]
@@ -88,8 +86,8 @@ class AuthorshipVerifier:
                     break
 
     def divide_questioned_texts_and_known_texts(self):
-        for user_name in [self.user_name_1, self.user_name_2]:
-            tweet_texts = self.tweet_texts_by_author[user_name]
+        for author_name in self.author_names:
+            tweet_texts = self.tweet_texts_by_author[author_name]
             shuffled_tweet_texts = random.sample(tweet_texts, len(tweet_texts))
 
             known_text_count = int(len(shuffled_tweet_texts) * 0.9)
@@ -97,53 +95,53 @@ class AuthorshipVerifier:
             known_texts = shuffled_tweet_texts[:known_text_count]
             questioned_texts = shuffled_tweet_texts[known_text_count:]
 
-            self.known_texts_by_author[user_name] = known_texts
-            self.questioned_texts_by_author[user_name] = questioned_texts
+            self.known_texts_by_author[author_name] = known_texts
+            self.questioned_texts_by_author[author_name] = questioned_texts
 
     def create_ngram_count_by_author(self):
-        for user_name in [self.user_name_1, self.user_name_2]:
-            self.ngram_count_by_author[user_name] = dict()
+        for author_name in self.author_names:
+            self.ngram_count_by_author[author_name] = dict()
 
             for n in self.ngram_numbers:
-                self.ngram_count_by_author[user_name][n] = collections.defaultdict(lambda: int())
+                self.ngram_count_by_author[author_name][n] = collections.defaultdict(lambda: int())
 
-                for known_text in self.known_texts_by_author[user_name]:
+                for known_text in self.known_texts_by_author[author_name]:
                     tokenized_text = get_tokenized_text(known_text)
                     for ngram in nltk.ngrams(tokenized_text, n):
-                        self.ngram_count_by_author[user_name][n][ngram] += 1
+                        self.ngram_count_by_author[author_name][n][ngram] += 1
 
     def create_each_word_occurrence_rate_by_author(self):
-        for user_name in [self.user_name_1, self.user_name_2]:
-            self.each_word_occurrence_rate_by_author[user_name] = collections.defaultdict(lambda: float())
+        for author_name in self.author_names:
+            self.each_word_occurrence_rate_by_author[author_name] = collections.defaultdict(lambda: float())
 
-            word_count_sum = sum(self.ngram_count_by_author[user_name][1].values())
+            word_count_sum = sum(self.ngram_count_by_author[author_name][1].values())
 
-            for word, word_count in self.ngram_count_by_author[user_name][1].items():
+            for word, word_count in self.ngram_count_by_author[author_name][1].items():
                 word_occurrence = word_count / word_count_sum
-                self.each_word_occurrence_rate_by_author[user_name][word] = word_occurrence
+                self.each_word_occurrence_rate_by_author[author_name][word] = word_occurrence
 
     def analysis(self):
         total_questioned_text_cnt = sum(len(questioned_texts) for questioned_texts in self.questioned_texts_by_author.values())
         correct_author_cnt = 0
 
-        for question_user_name in [self.user_name_1, self.user_name_2]:
-            for questioned_text in self.questioned_texts_by_author[question_user_name]:
+        for question_author_name in self.author_names:
+            for questioned_text in self.questioned_texts_by_author[question_author_name]:
                 score_dict = collections.defaultdict(lambda: int())
                 tokenized_text = get_tokenized_text(questioned_text)
                 for n in self.ngram_numbers:
                     for ngram in nltk.ngrams(tokenized_text, n):
-                        for known_user_name in [self.user_name_1, self.user_name_2]:
-                            score_dict[known_user_name] += self.ngram_count_by_author[known_user_name][n][ngram] * math.pow(50, n - 1)
+                        for known_author_name in self.author_names:
+                            score_dict[known_author_name] += self.ngram_count_by_author[known_author_name][n][ngram] * math.pow(50, n - 1)
 
-                user_1_word_count = sum(self.ngram_count_by_author[self.user_name_1][1].values())
-                user_2_word_count = sum(self.ngram_count_by_author[self.user_name_2][1].values())
+                author_1_total_word_count = sum(self.ngram_count_by_author[self.author_names[0]][1].values())
+                author_2_total_word_count = sum(self.ngram_count_by_author[self.author_names[1]][1].values())
 
-                ratio = user_1_word_count / user_2_word_count
-                score_dict[self.user_name_1] /= ratio
+                total_word_count_ratio = author_1_total_word_count / author_2_total_word_count
+                score_dict[self.author_names[0]] /= total_word_count_ratio
 
-                for known_user_name in [self.user_name_1, self.user_name_2]:
+                for known_author_name in self.author_names:
                     for word in nltk.ngrams(tokenized_text, 1):
-                        score_dict[known_user_name] += self.each_word_occurrence_rate_by_author[known_user_name][word] * 100000
+                        score_dict[known_author_name] += self.each_word_occurrence_rate_by_author[known_author_name][word] * 100000
 
                 result_user_name = str()
                 max_score = 0
@@ -152,7 +150,7 @@ class AuthorshipVerifier:
                         max_score = score
                         result_user_name = user_name
 
-                if question_user_name == result_user_name:
+                if question_author_name == result_user_name:
                     correct_author_cnt += 1
 
         print(f'{correct_author_cnt} of {total_questioned_text_cnt} questioned texts were correctly determined.')
