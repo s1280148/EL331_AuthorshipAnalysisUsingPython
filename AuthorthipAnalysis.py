@@ -50,6 +50,8 @@ class AuthorshipVerifier:
     questioned_texts_by_author = dict()
     ngram_count_by_author = dict()
     each_word_occurrence_rate_by_author = dict()
+    questioned_texts_analysis_result = list()
+    known_texts_for_compare_questioned_texts = list()
 
     ngram_numbers = [1, 2, 3]
 
@@ -121,9 +123,15 @@ class AuthorshipVerifier:
                 self.each_word_occurrence_rate_by_author[author_name][word] = word_occurrence
 
     def analysis(self):
-        total_questioned_text_cnt = sum(len(questioned_texts) for questioned_texts in self.questioned_texts_by_author.values())
-        correct_author_cnt = 0
+        self.create_questioned_texts_analysis_result()
 
+        self.create_known_texts_for_compare_questioned_texts()
+
+        self.compare_author_of_questioned_text_and_known_text()
+
+        self.print_accuracy()
+
+    def create_questioned_texts_analysis_result(self):
         for question_author_name in self.author_names:
             for questioned_text in self.questioned_texts_by_author[question_author_name]:
                 score_dict = collections.defaultdict(lambda: int())
@@ -143,17 +151,72 @@ class AuthorshipVerifier:
                     for word in nltk.ngrams(tokenized_text, 1):
                         score_dict[known_author_name] += self.each_word_occurrence_rate_by_author[known_author_name][word] * 100000
 
-                result_user_name = str()
-                max_score = 0
-                for user_name, score in score_dict.items():
-                    if score > max_score:
-                        max_score = score
-                        result_user_name = user_name
+                result_author_name = max(score_dict.items(), key = lambda x: x[1])[0]
 
-                if question_author_name == result_user_name:
-                    correct_author_cnt += 1
+                is_collect_author = result_author_name == question_author_name
 
-        print(f'{correct_author_cnt} of {total_questioned_text_cnt} questioned texts were correctly determined.')
+                questioned_text_analysis_result = (result_author_name, questioned_text, is_collect_author)
+
+                self.questioned_texts_analysis_result.append(questioned_text_analysis_result)
+
+    def create_known_texts_for_compare_questioned_texts(self):
+        known_texts_info = list()
+
+        for author_name in self.author_names:
+            for known_text in self.known_texts_by_author[author_name]:
+                known_texts_info.append((author_name, known_text))
+
+        total_questioned_text_cnt = sum(len(questioned_texts) for questioned_texts in self.questioned_texts_by_author.values())
+
+        self.known_texts_for_compare_questioned_texts = random.sample(known_texts_info, total_questioned_text_cnt)
+
+    def compare_author_of_questioned_text_and_known_text(self):
+        total_questioned_text_cnt = sum(len(questioned_texts) for questioned_texts in self.questioned_texts_by_author.values())
+        same_author_count = 0
+
+        print(f'There are {total_questioned_text_cnt} questioned text.')
+
+        print()
+
+        for i in range(total_questioned_text_cnt):
+            known_text_info = self.known_texts_for_compare_questioned_texts[i]
+            questioned_text_info = self.questioned_texts_analysis_result[i]
+
+            pre_line = f'{i + 1})' + '-' * 500
+            post_line = '-' * len(pre_line)
+
+            print(pre_line)
+
+            print("・Known text")
+            print(known_text_info[1])
+
+            print()
+
+            print("・Questioned text")
+            print(questioned_text_info[1])
+
+            print()
+
+            print("・Result")
+            if known_text_info[0] == questioned_text_info[0]:
+                print("Same author.")
+                same_author_count += 1
+            else:
+                print("Different author.")
+
+            print(post_line)
+
+            print()
+
+        print(f"{same_author_count} of {total_questioned_text_cnt} text is same author.")
+
+        print()
+
+    def print_accuracy(self):
+        total_questioned_text_cnt = sum(len(questioned_texts) for questioned_texts in self.questioned_texts_by_author.values())
+        correct_author_cnt = len(list(filter(lambda question_text_info: question_text_info[2] is True, self.questioned_texts_analysis_result)))
+
+        print(f"Accuracy: {correct_author_cnt / total_questioned_text_cnt * 100} %")
 
 
 # Main process of the program
@@ -177,9 +240,6 @@ def main(args):
     print()
 
     authorshipVerifier = AuthorshipVerifier(client, user_name_1, user_name_2)
-
-    print("Analyzing...")
-    print()
 
     authorshipVerifier.analysis()
 
