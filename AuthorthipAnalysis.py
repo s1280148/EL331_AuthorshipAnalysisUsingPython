@@ -168,7 +168,7 @@ class AuthorshipVerifier:
             ngram_count_by_author[author_name][n][n-gram] = Number of occurrences of the specified n-gram.
 
             Example:
-                ngram_count_by_author["Johnson"][2][("an", "apple")] = The number of occurrences of "an apple" in Jonson sentences can be obtained. (bi-gram)
+                ngram_count_by_author["Johnson"][2][("an", "apple")] = The number of occurrences of "an apple" in Johnson sentences can be obtained. (bi-gram)
         """
         for author_name in self.author_names:
             self.ngram_count_by_author[author_name] = dict()
